@@ -1,10 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# import sys
-# reload(sys)
-# sys.setdefaultencoding("utf-8")
-
 import  os
 import  json
 import  time
@@ -16,7 +12,6 @@ import  torch.nn.functional         as F
 import  torch.nn                    as nn
 import  numpy                       as np
 import  torch.optim                 as optim
-# import  cPickle                     as pickle
 import  pickle
 import  torch.autograd              as autograd
 from    tqdm                        import tqdm
@@ -1090,36 +1085,3 @@ test_map        = get_one_map('test', test_data, test_docs, use_sent_tokenizer=T
 ###########################################################
 print(test_map)
 
-'''
-
-rsync -av cslab241.cs.aueb.gr:/home/DATA/Biomedical/bioasq7/ bioasq_all/bioasq7/
-
-scp /home/dpappas/bioasq_all/bioasq7/submit_files/test_batch_4/* cslab241.cs.aueb.gr:/home/DATA/Biomedical/bioasq7/submit_files/test_batch_4
-scp /home/dpappas/bioasq_all/bioasq7/document_results/test_batch_4/* cslab241.cs.aueb.gr:/home/DATA/Biomedical/bioasq7/document_results/test_batch_4
-scp /home/dpappas/bioasq_all/bioasq7/snippet_results/test_batch_4/* cslab241.cs.aueb.gr:/home/DATA/Biomedical/bioasq7/snippet_results/test_batch_4
-rsync -av  
-
-
-mv "./test_bert_high_pdrmm_batch4/v3 test_emit_bioasq.json" "/home/dpappas/bioasq_all/bioasq7/snippet_results/test_batch_4/bertHC_pdrmm.json"
-mv "./test_bert_pdrmm_batch4/v3 test_emit_bioasq.json"      "/home/dpappas/bioasq_all/bioasq7/snippet_results/test_batch_4/bert_pdrmm.json"
-mv "./test_termpacrr_pdrmm_batch4/v3 test_emit_bioasq.json" "/home/dpappas/bioasq_all/bioasq7/snippet_results/test_batch_4/termpaccr_pdrmm.json"
-
-mv "./test_berthigh_pdrmm_batch5/v3 test_emit_bioasq.json"  "/home/dpappas/bioasq_all/bioasq7/snippet_results/test_batch_5/bertHC_pdrmm.json"
-mv "./test_bert_pdrmm_batch5/v3 test_emit_bioasq.json"      "/home/dpappas/bioasq_all/bioasq7/snippet_results/test_batch_5/bert_pdrmm.json"
-mv "./test_termpacrr_pdrmm_batch5/v3 test_emit_bioasq.json" "/home/dpappas/bioasq_all/bioasq7/snippet_results/test_batch_5/termpaccr_pdrmm.json"
-
-scp bioasq_all/bioasq7/document_results/test_batch_5/* dpappas@cslab241.cs.aueb.gr:/home/DATA/Biomedical/bioasq7/document_results/test_batch_5/
-scp bioasq_all/bioasq7/snippet_results/test_batch_5/* dpappas@cslab241.cs.aueb.gr:/home/DATA/Biomedical/bioasq7/snippet_results/test_batch_5/
-
-java -Xmx10G -cp \
-/home/dpappas/bioasq_all/dist/my_bioasq_eval_2.jar \
-evaluation.EvaluatorTask1b -phaseA -e 5 \
-"/home/dpappas/bioasq_all/bioasq7/data/test_batch_1/BioASQ-task7bPhaseB-testset1" \
-"/home/dpappas/bioasq_all/bioasq7/document_results/test_batch_1/bert.json"
-
-
-cp \
-"./test_pdrmm_pdrmm_batch5/v3 test_emit_bioasq.json" \
-"/home/dpappas/bioasq_all/bioasq7/snippet_results/test_batch_5/pdrmm_pdrmm.json"
-
-'''
