@@ -22,7 +22,7 @@ from    difflib                     import SequenceMatcher
 import  re
 import  nltk
 import  math
-import gensim
+import  gensim
 
 bioclean    = lambda t: re.sub('[.,?;*!%^&_+():-\[\]{}]', '', t.replace('"', '').replace('/', '').replace('\\', '').replace("'", '').strip().lower()).split()
 softmax     = lambda z: np.exp(z) / np.sum(np.exp(z))

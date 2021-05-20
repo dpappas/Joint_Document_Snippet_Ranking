@@ -1,10 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# import sys
-# reload(sys)
-# sys.setdefaultencoding("utf-8")
-
 import  os, re, sys, json, time, random, subprocess, math, pickle, logging
 import  torch
 import  torch.nn.functional         as F
@@ -18,7 +14,7 @@ from    gensim.models.keyedvectors  import KeyedVectors
 from    nltk.tokenize               import sent_tokenize
 from    difflib                     import SequenceMatcher
 import  nltk
-import gensim
+import  gensim
 
 bioclean    = lambda t: re.sub('[.,?;*!%^&_+():-\[\]{}]', '', t.replace('"', '').replace('/', '').replace('\\', '').replace("'", '').strip().lower()).split()
 softmax     = lambda z: np.exp(z) / np.sum(np.exp(z))
