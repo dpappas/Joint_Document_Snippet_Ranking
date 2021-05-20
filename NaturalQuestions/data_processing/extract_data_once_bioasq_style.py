@@ -14,7 +14,7 @@ import math
 bioclean_mod    = lambda t: re.sub('[.,?;*!%^&_+():-\[\]{}]', '', t.replace('"', '').replace('/', '').replace('\\', '').replace("'", '').replace("-", ' ').strip().lower()).split()
 
 stopwords       = nltk.corpus.stopwords.words("english")
-elk_ip          = '192.168.188.80'
+elk_ip          = 'localhost'
 
 def clean_start_end(word):
     word = re.sub(r'(^\W+)', r'\1 ', word)
