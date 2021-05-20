@@ -11,18 +11,16 @@ import  torch
 import  torch.nn.functional         as F
 import  torch.nn                    as nn
 import  numpy                       as np
-import  torch.optim                 as optim
-import  pickle
 import  torch.autograd              as autograd
 from    tqdm                        import tqdm
 from    pprint                      import pprint
-from    gensim.models.keyedvectors  import KeyedVectors
 from    nltk.tokenize               import sent_tokenize
 from    difflib                     import SequenceMatcher
 import  re
 import  nltk
 import  math
 import  gensim
+import  os, sys, pickle, json
 
 bioclean    = lambda t: re.sub('[.,?;*!%^&_+():-\[\]{}]', '', t.replace('"', '').replace('/', '').replace('\\', '').replace("'", '').strip().lower()).split()
 softmax     = lambda z: np.exp(z) / np.sum(np.exp(z))
@@ -1039,10 +1037,13 @@ class Sent_Posit_Drmm_Modeler(nn.Module):
 use_cuda = torch.cuda.is_available()
 ###########################################################
 dataloc             = '/home/dpappas/NQ_data/'
-(dev_data, dev_docs, test_data, test_docs, train_data, train_docs, idf, max_idf, wv, bioasq7_data) = load_all_data(dataloc)
-##########################################
 eval_path           = '/home/dpappas/bioasq_all/eval/run_eval.py'
 retrieval_jar_path  = '/home/dpappas/bioasq_all/dist/my_bioasq_eval_2.jar'
+resume_from         = '/home/dpappas/bioasq_snippet_pdrmm_0p01_run_0/best_dev_checkpoint.pth.tar'
+docs_retrieved_path = '/media/dpappas/dpappas_data/models_out/bioasq7_outputs/test_NQ_pdrmm/v3 test_emit_bioasq.json'
+odir                = '/home/dpappas/test_pdrmm_pdrmm_NQ/'
+###########################################################
+(dev_data, dev_docs, test_data, test_docs, train_data, train_docs, idf, max_idf, wv, bioasq7_data) = load_all_data(dataloc)
 ###########################################################
 avgdl       = 25.516591572602003
 mean        = 0.28064389869036355
@@ -1061,18 +1062,14 @@ model       = Sent_Posit_Drmm_Modeler(embedding_dim=embedding_dim, k_for_maxpool
 if(use_cuda):
     model   = model.cuda()
 ###########################################################
-resume_from     = '/home/dpappas/bioasq_snippet_pdrmm_0p01_run_0/best_dev_checkpoint.pth.tar'
 load_model_from_checkpoint(resume_from)
 params          = model.parameters()
 print_params(model)
 ###########################################################
-import os, sys, pickle, json
 
-odir                = '/home/dpappas/test_pdrmm_pdrmm_NQ/'
 if (not os.path.exists(odir)):
     os.makedirs(odir)
 
-docs_retrieved_path = '/media/dpappas/dpappas_data/models_out/bioasq7_outputs/test_NQ_pdrmm/v3 test_emit_bioasq.json'
 with open(docs_retrieved_path, 'r') as f:
     doc_res = json.load(f)
     doc_res = dict([(t['id'], t) for t in doc_res['questions']])
