@@ -984,11 +984,13 @@ min_doc_score               = -1000.
 min_sent_score              = -1000.
 emit_only_abstract_sents    = False
 ##########################################
-eval_path           = '/home/dpappas/bioasq_all/eval/run_eval.py'
-retrieval_jar_path  = '/home/dpappas/bioasq_all/dist/my_bioasq_eval_2.jar'
-odd                 = '/home/dpappas/'
+eval_path                   = '/home/dpappas/bioasq_all/eval/run_eval.py'
+retrieval_jar_path          = '/home/dpappas/bioasq_all/dist/my_bioasq_eval_2.jar'
+odd                         = '/home/dpappas/'
+dataloc                     = '/home/dpappas/NQ_data/'
+odir                        = '/media/dpappas/dpappas_data/models_out/bioasq7_outputs/test_NQ_pdrmm/'
+resume_from                 = '/media/dpappas/dpappas_data/models_out/best_dev_checkpoint.pth.tar'
 ##########################################
-dataloc             = '/home/dpappas/NQ_data/'
 (
     dev_data, dev_docs, test_data, test_docs, train_data, train_docs, idf, max_idf, wv, bioasq7_data
 ) = load_all_data(dataloc)
@@ -998,7 +1000,6 @@ print('{} training examples'.format(len(train_data['queries'])))
 print('{} development examples'.format(len(dev_data['queries'])))
 print('{} testing examples'.format(len(test_data['queries'])))
 ##########################################
-odir                = '/media/dpappas/dpappas_data/models_out/bioasq7_outputs/test_NQ_pdrmm/'
 if (not os.path.exists(odir)):
     os.makedirs(odir)
 ###########################################################
@@ -1020,7 +1021,6 @@ model       = Posit_Drmm_Modeler(embedding_dim=embedding_dim, k_for_maxpool=k_fo
 if(use_cuda):
     model   = model.cuda()
 ###########################################################
-resume_from     = '/home/dpappas/NQ_doc_pdrmm_0p01_run_0/best_dev_checkpoint.pth.tar'
 load_model_from_checkpoint(resume_from)
 params      = model.parameters()
 print_params(model)
