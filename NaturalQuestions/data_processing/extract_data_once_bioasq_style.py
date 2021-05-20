@@ -213,16 +213,16 @@ train_data  = {'queries': train_data['queries'][:dev_from]}
 
 ########################################################
 
-odir = '/home/dpappas/NQ_data/'
+odir        = '../data/'
 
 with open(os.path.join(odir, 'NQ_training7b.train.dev.test.json'), 'w') as f:
     f.write(json.dumps(training7b_train_json, indent=4, sort_keys=True))
 
-pickle.dump(bm25_docset_train_pkl,  open(os.path.join(odir, '../data/NQ_bioasq7_bm25_docset_top100.train.dev.test.pkl'),  'wb'))
+pickle.dump(bm25_docset_train_pkl,  open(os.path.join(odir, 'NQ_bioasq7_bm25_docset_top100.train.dev.test.pkl'),  'wb'))
 
-pickle.dump(train_data,             open(os.path.join(odir, '../data/NQ_bioasq7_bm25_top100.train.pkl'), 'wb'))
-pickle.dump(dev_data,               open(os.path.join(odir, '../data/NQ_bioasq7_bm25_top100.dev.pkl'),   'wb'))
-pickle.dump(test_data,              open(os.path.join(odir, '../data/NQ_bioasq7_bm25_top100.test.pkl'),  'wb'))
+pickle.dump(train_data,             open(os.path.join(odir, 'NQ_bioasq7_bm25_top100.train.pkl'), 'wb'))
+pickle.dump(dev_data,               open(os.path.join(odir, 'NQ_bioasq7_bm25_top100.dev.pkl'),   'wb'))
+pickle.dump(test_data,              open(os.path.join(odir, 'NQ_bioasq7_bm25_top100.test.pkl'),  'wb'))
 
 
 
