@@ -22,6 +22,8 @@ First you need to download the [official dataset](https://ai.google.com/research
 
 * [Dimitris Pappas](dpappas@aueb.gr)
 
+### Cite
+
 
 
 
