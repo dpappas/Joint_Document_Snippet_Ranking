@@ -38,30 +38,7 @@ for item in tqdm(items, total=total):
     df2.update(Counter(list(set([t.lower() for t in bioclean_mine(item['_source']['paragraph_text'])]))))
     df3.update(Counter(list(set([t.lower() for t in my_tokenize(item['_source']['paragraph_text'])]))))
 
-
 pickle.dump(df,  open('NQ_df.pkl', 'wb'))
 pickle.dump(df2, open('NQ_bioclean_mine_df.pkl', 'wb'))
 pickle.dump(df3, open('NQ_my_tokenize_df.pkl', 'wb'))
-
-'''
-import pickle
-from pprint import pprint
-
-d = pickle.load(open('NQ_df.pkl','rb'))
-d = sorted(d.items(), key=lambda x: x[1], reverse=True)
-pprint(d[-20:])
-
-d2 = pickle.load(open('NQ_bioclean_mine_df.pkl','rb'))
-d2 = sorted(d2.items(), key=lambda x: x[1], reverse=True)
-pprint(d2[-20:])
-
-d3 = pickle.load(open('NQ_my_tokenize_df.pkl','rb'))
-d3 = sorted(d3.items(), key=lambda x: x[1], reverse=True)
-pprint(d3[-20:])
-
-print(len(d), len(d2), len(d3))
-
-'''
-
-
 
