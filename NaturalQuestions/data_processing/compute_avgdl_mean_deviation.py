@@ -4,7 +4,6 @@ from tqdm import tqdm
 from nltk.tokenize import word_tokenize, sent_tokenize
 from elasticsearch  import Elasticsearch
 from elasticsearch.helpers import scan
-import gensim
 
 bioclean_mod = lambda t: re.sub('[.,?;*!%^&_+():-\[\]{}]', '', t.replace('"', '').replace('/', '').replace('\\', '').replace("'", '').replace("-", ' ').strip().lower()).split()
 
