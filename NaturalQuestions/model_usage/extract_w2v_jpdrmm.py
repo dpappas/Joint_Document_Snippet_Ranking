@@ -1239,12 +1239,13 @@ def load_model_from_checkpoint(resume_from):
         print("=> loaded checkpoint '{}' (epoch {})".format(resume_from, checkpoint['epoch']))
 
 use_cuda = torch.cuda.is_available()
-##########################################
+########################################## THESE ARE THE PARAMETERS THAT ONE SHOULD CHANGE ACCORDINGLY
 eval_path           = '/home/dpappas/bioasq_all/eval/run_eval.py'
 retrieval_jar_path  = '/home/dpappas/bioasq_all/dist/my_bioasq_eval_2.jar'
-odd                 = '/home/dpappas/'
-##########################################
 dataloc             = '/home/dpappas/NQ_data/'
+resume_from         = '/home/dpappas/natural_questions_jpdrmm_2L_0p01_run_0/best_dev_checkpoint.pth.tar'
+odir                = '/home/dpappas/test_natural_questions_jpdrmm_2L_0p01_run_0/'
+##########################################
 (test_data, test_docs, idf, max_idf, wv, bioasq7_data) = load_all_data(dataloc)
 ##########################################
 print('Splitted in: ')
@@ -1265,8 +1266,6 @@ max_epoch           = 30
 early_stop          = 4
 
 ###########################################################
-resume_from                 = '/home/dpappas/natural_questions_jpdrmm_2L_0p01_run_0/best_dev_checkpoint.pth.tar'
-odir                        = '/home/dpappas/test_natural_questions_jpdrmm_2L_0p01_run_0/'
 if(not os.path.exists(odir)):
     os.makedirs(odir)
 ###########################################################
