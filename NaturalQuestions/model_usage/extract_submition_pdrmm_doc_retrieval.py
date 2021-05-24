@@ -983,7 +983,7 @@ device      = torch.device("cuda:0") if(use_cuda) else torch.device("cpu")
 min_doc_score               = -1000.
 min_sent_score              = -1000.
 emit_only_abstract_sents    = False
-##########################################
+########################################## THESE ARE THE PARAMETERS THAT ONE SHOULD CHANGE ACCORDINGLY
 eval_path                   = '/home/dpappas/bioasq_all/eval/run_eval.py'
 retrieval_jar_path          = '/home/dpappas/bioasq_all/dist/my_bioasq_eval_2.jar'
 odd                         = '/home/dpappas/'

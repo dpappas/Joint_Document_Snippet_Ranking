@@ -1035,7 +1035,7 @@ class Sent_Posit_Drmm_Modeler(nn.Module):
         return gs_emits, bs_emits
 
 use_cuda = torch.cuda.is_available()
-###########################################################
+########################################################### THESE ARE THE PARAMETERS THAT ONE SHOULD CHANGE ACCORDINGLY
 dataloc             = '/home/dpappas/NQ_data/'
 eval_path           = '/home/dpappas/bioasq_all/eval/run_eval.py'
 retrieval_jar_path  = '/home/dpappas/bioasq_all/dist/my_bioasq_eval_2.jar'
