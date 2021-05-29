@@ -13,9 +13,10 @@ from    pprint                  import pprint
 import  torch.nn                as nn
 import  torch.optim             as optim
 import  torch.autograd          as autograd
-from    pytorch_pretrained_bert.tokenization    import BertTokenizer
-from    pytorch_pretrained_bert.modeling        import BertForSequenceClassification
-from    pytorch_pretrained_bert.file_utils      import PYTORCH_PRETRAINED_BERT_CACHE
+# from    pytorch_pretrained_bert.tokenization    import BertTokenizer
+# from    pytorch_pretrained_bert.modeling        import BertForSequenceClassification
+# from    pytorch_pretrained_bert.file_utils      import PYTORCH_PRETRAINED_BERT_CACHE
+from    pytorch_transformers import BertModel, BertTokenizer
 
 softmax         = lambda z: np.exp(z) / np.sum(np.exp(z))
 stopwords       = nltk.corpus.stopwords.words("english")
@@ -41,12 +42,13 @@ class InputExample(object):
         self.label = label
 
 class InputFeatures(object):
-    """A single set of features of data."""
-    def __init__(self, input_ids, input_mask, segment_ids, label_id):
-        self.input_ids = input_ids
-        self.input_mask = input_mask
-        self.segment_ids = segment_ids
-        self.label_id = label_id
+  """A single set of features of data."""
+  def __init__(self, unique_id, tokens, input_ids, input_mask, input_type_ids):
+    self.unique_id = unique_id
+    self.tokens = tokens
+    self.input_ids = input_ids
+    self.input_mask = input_mask
+    self.input_type_ids = input_type_ids
 
 def init_the_logger(hdlr):
     if not os.path.exists(odir):
@@ -106,41 +108,55 @@ def _truncate_seq_pair(tokens_a, tokens_b, max_length):
         else:
             tokens_b.pop()
 
-def convert_examples_to_features(examples):
+def convert_examples_to_features(examples, seq_length, tokenizer):
     """Loads a data file into a list of `InputBatch`s."""
     features = []
     for (ex_index, example) in enumerate(examples):
-        tokens_a = bert_tokenizer.tokenize(example.text_a)
+        tokens_a = tokenizer.tokenize(example.text_a)
         tokens_b = None
         if example.text_b:
-            tokens_b = bert_tokenizer.tokenize(example.text_b)
-            _truncate_seq_pair(tokens_a, tokens_b, max_seq_length - 3)
-        else:
-            if len(tokens_a) > max_seq_length - 2:
-                tokens_a = tokens_a[:(max_seq_length - 2)]
-        ####
-        tokens          = ["[CLS]"] + tokens_a + ["[SEP]"]
-        segment_ids     = [0] * len(tokens)
-        ####
+            tokens_b = tokenizer.tokenize(example.text_b)
         if tokens_b:
-            tokens      += tokens_b + ["[SEP]"]
-            segment_ids += [1] * (len(tokens_b) + 1)
-        input_ids       = bert_tokenizer.convert_tokens_to_ids(tokens)
-        ####
-        input_mask      = [1] * len(input_ids)
-        ####
-        padding         = [0] * (max_seq_length - len(input_ids))
-        input_ids       += padding
-        input_mask      += padding
-        segment_ids     += padding
-        ####
-        assert len(input_ids)   == max_seq_length
-        assert len(input_mask)  == max_seq_length
-        assert len(segment_ids) == max_seq_length
-        ####
-        in_f        = InputFeatures(input_ids=input_ids, input_mask=input_mask, segment_ids=segment_ids, label_id=0)
-        in_f.tokens = tokens
-        features.append(in_f)
+            _truncate_seq_pair(tokens_a, tokens_b, seq_length - 3)
+        else:
+            if len(tokens_a) > seq_length - 2:
+                tokens_a = tokens_a[0:(seq_length - 2)]
+        tokens          = []
+        input_type_ids  = []
+        tokens.append("[CLS]")
+        input_type_ids.append(0)
+        for token in tokens_a:
+            tokens.append(token)
+            input_type_ids.append(0)
+        tokens.append("[SEP]")
+        input_type_ids.append(0)
+        #
+        if tokens_b:
+            for token in tokens_b:
+                tokens.append(token)
+                input_type_ids.append(1)
+            tokens.append("[SEP]")
+            input_type_ids.append(1)
+        #
+        input_ids = tokenizer.convert_tokens_to_ids(tokens)
+        #
+        input_mask = [1] * len(input_ids)
+        while len(input_ids) < seq_length:
+            input_ids.append(0)
+            input_mask.append(0)
+            input_type_ids.append(0)
+        assert len(input_ids) == seq_length
+        assert len(input_mask) == seq_length
+        assert len(input_type_ids) == seq_length
+        features.append(
+            InputFeatures(
+                unique_id       = example.guid,
+                tokens          = tokens,
+                input_ids       = input_ids,
+                input_mask      = input_mask,
+                input_type_ids  = input_type_ids
+            )
+        )
     return features
 
 def tf(term, document):
@@ -272,6 +288,26 @@ def get_embeds(tokens, wv):
             ret2.append(wv[tok])
     return ret1, np.array(ret2, 'float64')
 
+def get_embeds_use_unk(tokens, wv):
+    ret1, ret2 = [], []
+    for tok in tokens:
+        if (tok in wv):
+            ret1.append(tok)
+            ret2.append(wv[tok])
+        else:
+            wv[tok] = np.random.randn(embedding_dim)
+            ret1.append(tok)
+            ret2.append(wv[tok])
+    return ret1, np.array(ret2, 'float64')
+
+def get_embeds_use_only_unk(tokens, wv):
+    ret1, ret2 = [], []
+    for tok in tokens:
+        wv[tok] = np.random.randn(embedding_dim)
+        ret1.append(tok)
+        ret2.append(wv[tok])
+    return ret1, np.array(ret2, 'float64')
+
 def load_idfs(idf_path, words):
     print('Loading IDF tables')
     #
@@ -367,7 +403,9 @@ def GetWords(data, doc_text, words):
             words[w] = 1
         for j in range(len(data['queries'][i]['retrieved_documents'])):
             doc_id = data['queries'][i]['retrieved_documents'][j]['doc_id']
-            dtext = (doc_text[doc_id]['title'] + ' <title> ' + doc_text[doc_id]['abstractText'])
+            dtext = (
+                    doc_text[doc_id]['title'] + ' <title> ' + doc_text[doc_id]['abstractText']
+            )
             dwds = tokenize(dtext)
             for w in dwds:
                 words[w] = 1
@@ -435,6 +473,32 @@ def get_norm_doc_scores(the_doc_scores):
         norm_doc_scores[ks[i]] = vs[i]
     return norm_doc_scores
 
+def select_snippets_v1(extracted_snippets):
+    '''
+    :param extracted_snippets:
+    :param doc_res:
+    :return: returns the best 10 snippets of all docs (0..n from each doc)
+    '''
+    sorted_snips = sorted(extracted_snippets, key=lambda x: x[1], reverse=True)
+    return sorted_snips[:10]
+
+def select_snippets_v2(extracted_snippets):
+    '''
+    :param extracted_snippets:
+    :param doc_res:
+    :return: returns the best snippet of each doc  (1 from each doc)
+    '''
+    # is_relevant, the_sent_score, ncbi_pmid_link, the_actual_sent_text
+    ret = {}
+    for es in extracted_snippets:
+        if (es[2] in ret):
+            if (es[1] > ret[es[2]][1]):
+                ret[es[2]] = es
+        else:
+            ret[es[2]] = es
+    sorted_snips = sorted(ret.values(), key=lambda x: x[1], reverse=True)
+    return sorted_snips[:10]
+
 def select_snippets_v3(extracted_snippets, the_doc_scores):
     '''
     :param      extracted_snippets:
@@ -459,6 +523,36 @@ def similar(upstream_seq, downstream_seq):
     r1 = SequenceMatcher(None, to_match, longest_match).ratio()
     return r1
 
+def get_pseudo_retrieved(dato, bioasq6_data):
+    some_ids = [item['document'].split('/')[-1].strip() for item in bioasq6_data[dato['query_id']]['snippets']]
+    pseudo_retrieved = [
+        {
+            'bm25_score': 7.76,
+            'doc_id': id,
+            'is_relevant': True,
+            'norm_bm25_score': 3.85
+        }
+        for id in set(some_ids)
+    ]
+    return pseudo_retrieved
+
+def get_snippets_loss(good_sent_tags, gs_emits_, bs_emits_):
+    wright = torch.cat([gs_emits_[i] for i in range(len(good_sent_tags)) if (good_sent_tags[i] == 1)])
+    wrong = [gs_emits_[i] for i in range(len(good_sent_tags)) if (good_sent_tags[i] == 0)]
+    wrong = torch.cat(wrong + [bs_emits_.squeeze(-1)])
+    losses = [model.my_hinge_loss(w.unsqueeze(0).expand_as(wrong), wrong) for w in wright]
+    return sum(losses) / float(len(losses))
+
+def get_two_snip_losses(good_sent_tags, gs_emits_, bs_emits_):
+    bs_emits_       = bs_emits_.squeeze(-1)
+    gs_emits_       = gs_emits_.squeeze(-1)
+    good_sent_tags  = torch.FloatTensor(good_sent_tags).to(device)
+    tags_2          = torch.zeros_like(bs_emits_).to(device)
+    #
+    sn_d1_l = F.binary_cross_entropy(gs_emits_, good_sent_tags, reduction='sum')
+    sn_d2_l = F.binary_cross_entropy(bs_emits_, tags_2, reduction='sum')
+    return sn_d1_l, sn_d2_l
+
 def save_checkpoint(epoch, model, bert_model, max_dev_map, optimizer1, optimizer2, filename='checkpoint.pth.tar'):
     state = {
         'epoch'             : epoch,
@@ -470,28 +564,53 @@ def save_checkpoint(epoch, model, bert_model, max_dev_map, optimizer1, optimizer
     }
     torch.save(state, filename)
 
-def embed_the_sent(sent):
-    eval_examples   = [InputExample(guid='example_dato_1', text_a=sent, text_b=None, label='1')]
-    eval_features   = convert_examples_to_features(eval_examples)
-    eval_feat       = eval_features[0]
-    input_ids       = torch.tensor([eval_feat.input_ids], dtype=torch.long).to(device)
-    input_mask      = torch.tensor([eval_feat.input_mask], dtype=torch.long).to(device)
-    segment_ids     = torch.tensor([eval_feat.segment_ids], dtype=torch.long).to(device)
-    tokens          = eval_feat.tokens
-    with torch.no_grad():
-        token_embeds, pooled_output = bert_model.bert(input_ids, segment_ids, input_mask, output_all_encoded_layers=False)
-        tok_inds                    = [i for i in range(len(tokens)) if(not tokens[i].startswith('##'))]
-        token_embeds                = token_embeds.squeeze(0)
-        embs                        = token_embeds[tok_inds,:]
-    fixed_tokens = fix_bert_tokens(tokens)
-    return fixed_tokens, embs
+def embed_the_sents_tokens(sents, questions=None):
+    ##########################################################################
+    if(questions is None):
+        questions = [None] * len(sents)
+    eval_examples       = []
+    c = 0
+    for sent, question in zip(sents, questions):
+        eval_examples.append(InputExample(guid='example_dato_{}'.format(str(c)), text_a=sent, text_b=question, label=str(c)))
+        c+=1
+    ##########################################################################
+    eval_features           = convert_examples_to_features(eval_examples, 256, bert_tokenizer)
+    input_ids               = torch.tensor([ef.input_ids for ef in eval_features], dtype=torch.long).to(device)
+    attention_mask          = torch.tensor([ef.input_mask for ef in eval_features], dtype=torch.long).to(device)
+    ##########################################################################
+    extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2).float()
+    head_mask               = [None] * bert_model.config.num_hidden_layers
+    token_type_ids          = torch.zeros_like(input_ids).to(device)
+    embedding_output        = bert_model.embeddings(input_ids, position_ids=None, token_type_ids=token_type_ids)
+    sequence_output, rest   = bert_model.encoder(embedding_output, extended_attention_mask, head_mask=head_mask)
+    rest                    = torch.stack(rest, dim=-1)
+    ##########################################################################
+    if(adapt):
+        rest                = model.layers_weights(rest).squeeze(-1)
+    else:
+        rest                = sequence_output
+    ret = []
+    for i in range(len(sents)):
+        try:
+            bpes     = eval_features[i].tokens
+            bpes     = bpes[:bpes.index('[SEP]')]
+            tok_inds = [i for i in range(len(bpes)) if (not bpes[i].startswith('##') and bpes[i] not in ['[CLS]', '[SEP]'])]
+            embeds   = rest[i][tok_inds]
+            fixed_tokens = [tok for tok in fix_bert_tokens(bpes) if tok not in ['[CLS]', '[SEP]']]
+            ret.append((fixed_tokens, embeds))
+        except:
+            print(c, len(sents), len(eval_features), len(eval_examples))
+            print('-' + sents[i])
+            print('-' + eval_features[i])
+            exit()
+    return ret
 
 def get_map_res(fgold, femit, eval_path):
-    trec_eval_res = subprocess.Popen(['python', eval_path, fgold, femit], stdout=subprocess.PIPE, shell=False)
-    (out, err) = trec_eval_res.communicate()
-    lines = out.decode("utf-8").split('\n')
-    map_res = [l for l in lines if (l.startswith('map '))][0].split('\t')
-    map_res = float(map_res[-1])
+    trec_eval_res   = subprocess.Popen(['python', eval_path, fgold, femit], stdout=subprocess.PIPE, shell=False)
+    (out, err)      = trec_eval_res.communicate()
+    lines           = out.decode("utf-8").split('\n')
+    map_res         = [l for l in lines if (l.startswith('map '))][0].split('\t')
+    map_res         = float(map_res[-1])
     return map_res
 
 def get_bioasq_res(prefix, data_gold, data_emitted, data_for_revision):
@@ -598,7 +717,7 @@ def do_for_one_retrieved(doc_emit_, gs_emits_, held_out_sents, retr, doc_res, go
     return doc_res, extracted_from_one, all_emits
 
 def prep_data(quest, the_doc, the_bm25, good_snips, quest_toks):
-    good_sents          = sent_tokenize(the_doc['title']) + sent_tokenize(the_doc['abstractText'])
+    good_sents          = [sent for sent in sent_tokenize(the_doc['title']) + sent_tokenize(the_doc['abstractText']) if len(bioclean(sent))>0]
     ####
     good_doc_af         = GetScores(quest, the_doc['title'] + the_doc['abstractText'], the_bm25)
     good_doc_af.append(len(good_sents) / 60.)
@@ -622,8 +741,11 @@ def prep_data(quest, the_doc, the_bm25, good_snips, quest_toks):
     good_doc_af.extend(features)
     ####
     good_sents_embeds, good_sents_escores, held_out_sents, good_sent_tags, good_oh_sim = [], [], [], [], []
-    for good_text in good_sents:
-        sent_toks, sent_embeds  = embed_the_sent(' '.join(bioclean(good_text)))
+    sents                       = [' '.join(bioclean(ss)).strip() for ss in good_sents]
+    sents_tokens_embeds         = embed_the_sents_tokens(sents, len(sents) * [quest])
+    for good_text, (sent_toks, sent_embeds) in zip(good_sents, sents_tokens_embeds):
+        if(len(sent_toks) == 0):
+            continue
         oh1, oh2, oh_sim        = create_one_hot_and_sim(quest_toks, sent_toks)
         good_oh_sim.append(oh_sim)
         good_escores            = GetScores(quest, good_text, the_bm25)[:-1]
@@ -666,7 +788,8 @@ def do_for_some_retrieved(docs, dato, retr_docs, data_for_revision, ret_data, us
     ####
     quest_text          = dato['query_text']
     quest_text          = ' '.join(bioclean(quest_text.replace('\ufeff', ' ')))
-    quest_tokens, qemb  = embed_the_sent(quest_text)
+    ttttt               = embed_the_sents_tokens([quest_text])
+    quest_tokens, qemb  = ttttt[0]
     ####
     q_idfs              = np.array([[idf_val(qw)] for qw in quest_tokens], 'float')
     gold_snips          = []
@@ -675,7 +798,7 @@ def do_for_some_retrieved(docs, dato, retr_docs, data_for_revision, ret_data, us
     extracted_snippets_known_rel_num    = []
     for retr in retr_docs:
         datum                   = prep_data(quest_text, docs[retr['doc_id']], retr['norm_bm25_score'], gold_snips, quest_tokens)
-        doc_emit_, gs_emits_ = model.emit_one(
+        doc_emit_, gs_emits_    = model.emit_one(
             doc1_sents_embeds   = datum['sents_embeds'],
             doc1_oh_sim         = datum['oh_sims'],
             question_embeds     = qemb,
@@ -707,19 +830,48 @@ def do_for_some_retrieved(docs, dato, retr_docs, data_for_revision, ret_data, us
     extracted_snippets = [tt for tt in extracted_snippets if (tt[2] in doc_res[:10])]
     extracted_snippets_known_rel_num = [tt for tt in extracted_snippets_known_rel_num if (tt[2] in doc_res[:10])]
     if (use_sent_tokenizer):
+        extracted_snippets_v1 = select_snippets_v1(extracted_snippets)
+        extracted_snippets_v2 = select_snippets_v2(extracted_snippets)
         extracted_snippets_v3 = select_snippets_v3(extracted_snippets, the_doc_scores)
+        extracted_snippets_known_rel_num_v1 = select_snippets_v1(extracted_snippets_known_rel_num)
+        extracted_snippets_known_rel_num_v2 = select_snippets_v2(extracted_snippets_known_rel_num)
         extracted_snippets_known_rel_num_v3 = select_snippets_v3(extracted_snippets_known_rel_num, the_doc_scores)
     else:
-        extracted_snippets_v3 = []
-        extracted_snippets_known_rel_num_v3 = []
+        extracted_snippets_v1, extracted_snippets_v2, extracted_snippets_v3 = [], [], []
+        extracted_snippets_known_rel_num_v1, extracted_snippets_known_rel_num_v2, extracted_snippets_known_rel_num_v3 = [], [], []
     #
-    snips_res_v3 = prep_extracted_snippets(extracted_snippets_v3, docs, dato['query_id'], doc_res[:10], dato['query_text'])
+    # pprint(extracted_snippets_v1)
+    # pprint(extracted_snippets_v2)
+    # pprint(extracted_snippets_v3)
+    # exit()
+    snips_res_v1 = prep_extracted_snippets(extracted_snippets_v1, docs, dato['query_id'], doc_res[:10],
+                                           dato['query_text'])
+    snips_res_v2 = prep_extracted_snippets(extracted_snippets_v2, docs, dato['query_id'], doc_res[:10],
+                                           dato['query_text'])
+    snips_res_v3 = prep_extracted_snippets(extracted_snippets_v3, docs, dato['query_id'], doc_res[:10],
+                                           dato['query_text'])
+    # pprint(snips_res_v1)
+    # pprint(snips_res_v2)
+    # pprint(snips_res_v3)
+    # exit()
     #
+    snips_res_known_rel_num_v1 = prep_extracted_snippets(extracted_snippets_known_rel_num_v1, docs, dato['query_id'],
+                                                         doc_res[:10], dato['query_text'])
+    snips_res_known_rel_num_v2 = prep_extracted_snippets(extracted_snippets_known_rel_num_v2, docs, dato['query_id'],
+                                                         doc_res[:10], dato['query_text'])
     snips_res_known_rel_num_v3 = prep_extracted_snippets(extracted_snippets_known_rel_num_v3, docs, dato['query_id'],
                                                          doc_res[:10], dato['query_text'])
     #
-    snips_res = {'v3': snips_res_v3}
-    snips_res_known = {'v3': snips_res_known_rel_num_v3}
+    snips_res = {
+        'v1': snips_res_v1,
+        'v2': snips_res_v2,
+        'v3': snips_res_v3,
+    }
+    snips_res_known = {
+        'v1': snips_res_known_rel_num_v1,
+        'v2': snips_res_known_rel_num_v2,
+        'v3': snips_res_known_rel_num_v3,
+    }
     return data_for_revision, ret_data, snips_res, snips_res_known
 
 def print_the_results(prefix, all_bioasq_gold_data, all_bioasq_subm_data, all_bioasq_subm_data_known, data_for_revision):
@@ -744,6 +896,7 @@ def print_params(model):
     :param model:   The pytorch model
     :return:        Nothing.
     '''
+    ###########################################################
     print(40 * '=')
     print(model)
     print(40 * '=')
@@ -767,32 +920,53 @@ def get_one_map(prefix, data, docs, use_sent_tokenizer):
     model.eval()
     bert_model.eval()
     #
-    ret_data                        = {'questions': []}
-    all_bioasq_subm_data_v3         = {"questions": []}
-    all_bioasq_subm_data_known_v3   = {"questions": []}
-    all_bioasq_gold_data            = {'questions': []}
-    data_for_revision               = {}
+    ret_data = {'questions': []}
+    all_bioasq_subm_data_v3 = {"questions": []}
+    all_bioasq_subm_data_known_v3 = {"questions": []}
+    all_bioasq_gold_data = {'questions': []}
+    data_for_revision = {}
     #
     for dato in tqdm(data['queries'], ascii=True):
         all_bioasq_gold_data['questions'].append(bioasq7_data[dato['query_id']])
         data_for_revision, ret_data, snips_res, snips_res_known = do_for_some_retrieved(
-            docs, dato, dato['retrieved_documents'], data_for_revision, ret_data,use_sent_tokenizer)
+            docs, dato, dato['retrieved_documents'], data_for_revision, ret_data, use_sent_tokenizer)
         all_bioasq_subm_data_v3['questions'].append(snips_res['v3'])
         all_bioasq_subm_data_known_v3['questions'].append(snips_res_known['v3'])
     #
-    print_the_results('v3 ' + prefix, all_bioasq_gold_data, all_bioasq_subm_data_v3, all_bioasq_subm_data_known_v3,
-                      data_for_revision)
+    print_the_results('v3 ' + prefix, all_bioasq_gold_data, all_bioasq_subm_data_v3, all_bioasq_subm_data_known_v3, data_for_revision)
     #
+    if (prefix == 'dev'):
+        with open(os.path.join(odir, 'elk_relevant_abs_posit_drmm_lists_dev.json'), 'w') as f:
+            f.write(json.dumps(ret_data, indent=4, sort_keys=True))
+        res_map = get_map_res(
+            os.path.join(odir, 'v3 dev_gold_bioasq.json'),
+            os.path.join(odir, 'elk_relevant_abs_posit_drmm_lists_dev.json'),
+            eval_path
+        )
+    else:
+        with open(os.path.join(odir, 'elk_relevant_abs_posit_drmm_lists_test.json'), 'w') as f:
+            f.write(json.dumps(ret_data, indent=4, sort_keys=True))
+        res_map = get_map_res(
+            os.path.join(odir, 'v3 test_emit_bioasq.json'),
+            os.path.join(odir, 'elk_relevant_abs_posit_drmm_lists_test.json'),
+            eval_path
+        )
+    return res_map
 
 class Sent_Posit_Drmm_Modeler(nn.Module):
-    def __init__(self, embedding_dim=30, k_for_maxpool=5, sentence_out_method='MLP', k_sent_maxpool=1):
+    def __init__(self, embedding_dim=30, k_for_maxpool=5, sentence_out_method='MLP', k_sent_maxpool=1, adapt=False):
         super(Sent_Posit_Drmm_Modeler, self).__init__()
-        self.k = k_for_maxpool
-        self.k_sent_maxpool = k_sent_maxpool
-        self.doc_add_feats = 11
-        self.sent_add_feats = 10
+        self.k                   = k_for_maxpool
+        self.k_sent_maxpool      = k_sent_maxpool
+        self.doc_add_feats       = 11
+        self.sent_add_feats      = 10
+        if(adapt):
+            self.layers_weights             = nn.Linear(13, 1, bias=False)
+            self.layers_weights.weight.data = torch.ones(13) / 13.
+        else:
+            self.layers_weights             = None
         #
-        self.embedding_dim = embedding_dim
+        self.embedding_dim       = embedding_dim
         self.sentence_out_method = sentence_out_method
         # to create q weights
         self.init_context_module()
@@ -801,42 +975,42 @@ class Sent_Posit_Drmm_Modeler(nn.Module):
         self.init_sent_output_layer()
         self.init_doc_out_layer()
         # doc loss func
-        self.margin_loss = nn.MarginRankingLoss(margin=1.0).to(device)
+        self.margin_loss    = nn.MarginRankingLoss(margin=1.0).to(model_device)
 
     def init_mesh_module(self):
-        self.mesh_h0 = autograd.Variable(torch.randn(1, 1, self.embedding_dim)).to(device)
-        self.mesh_gru = nn.GRU(self.embedding_dim, self.embedding_dim).to(device)
+        self.mesh_h0 = autograd.Variable(torch.randn(1, 1, self.embedding_dim)).to(model_device)
+        self.mesh_gru = nn.GRU(self.embedding_dim, self.embedding_dim).to(model_device)
 
     def init_context_module(self):
-        self.trigram_conv_1 = nn.Conv1d(self.embedding_dim, self.embedding_dim, 3, padding=2, bias=True).to(device)
-        self.trigram_conv_activation_1 = torch.nn.LeakyReLU(negative_slope=0.1).to(device)
-        self.trigram_conv_2 = nn.Conv1d(self.embedding_dim, self.embedding_dim, 3, padding=2, bias=True).to(device)
-        self.trigram_conv_activation_2 = torch.nn.LeakyReLU(negative_slope=0.1).to(device)
+        self.trigram_conv_1 = nn.Conv1d(self.embedding_dim, self.embedding_dim, 3, padding=2, bias=True).to(model_device)
+        self.trigram_conv_activation_1 = torch.nn.LeakyReLU(negative_slope=0.1).to(model_device)
+        self.trigram_conv_2 = nn.Conv1d(self.embedding_dim, self.embedding_dim, 3, padding=2, bias=True).to(model_device)
+        self.trigram_conv_activation_2 = torch.nn.LeakyReLU(negative_slope=0.1).to(model_device)
 
     def init_question_weight_module(self):
-        self.q_weights_mlp = nn.Linear(self.embedding_dim + 1, 1, bias=True).to(device)
+        self.q_weights_mlp = nn.Linear(self.embedding_dim + 1, 1, bias=True).to(model_device)
 
     def init_mlps_for_pooled_attention(self):
-        self.linear_per_q1 = nn.Linear(3 * 3, 8, bias=True).to(device)
-        self.my_relu1 = torch.nn.LeakyReLU(negative_slope=0.1).to(device)
-        self.linear_per_q2 = nn.Linear(8, 1, bias=True).to(device)
+        self.linear_per_q1 = nn.Linear(3 * 3, 8, bias=True).to(model_device)
+        self.my_relu1 = torch.nn.LeakyReLU(negative_slope=0.1).to(model_device)
+        self.linear_per_q2 = nn.Linear(8, 1, bias=True).to(model_device)
 
     def init_sent_output_layer(self):
         if (self.sentence_out_method == 'MLP'):
-            self.sent_out_layer_1 = nn.Linear(self.sent_add_feats + 1, 8, bias=False).to(device)
-            self.sent_out_activ_1 = torch.nn.LeakyReLU(negative_slope=0.1).to(device)
-            self.sent_out_layer_2 = nn.Linear(8, 1, bias=False).to(device)
+            self.sent_out_layer_1 = nn.Linear(self.sent_add_feats + 1, 8, bias=False).to(model_device)
+            self.sent_out_activ_1 = torch.nn.LeakyReLU(negative_slope=0.1).to(model_device)
+            self.sent_out_layer_2 = nn.Linear(8, 1, bias=False).to(model_device)
         else:
-            self.sent_res_h0 = autograd.Variable(torch.randn(2, 1, 5)).to(device)
+            self.sent_res_h0 = autograd.Variable(torch.randn(2, 1, 5)).to(model_device)
             self.sent_res_bigru = nn.GRU(input_size=self.sent_add_feats + 1, hidden_size=5, bidirectional=True,
-                                         batch_first=False).to(device)
-            self.sent_res_mlp = nn.Linear(10, 1, bias=False).to(device)
+                                         batch_first=False).to(model_device)
+            self.sent_res_mlp = nn.Linear(10, 1, bias=False).to(model_device)
 
     def init_doc_out_layer(self):
-        self.final_layer_1 = nn.Linear(self.doc_add_feats + self.k_sent_maxpool, 8, bias=True).to(device)
-        self.final_activ_1 = torch.nn.LeakyReLU(negative_slope=0.1).to(device)
-        self.final_layer_2 = nn.Linear(8, 1, bias=True).to(device)
-        self.oo_layer = nn.Linear(2, 1, bias=True).to(device)
+        self.final_layer_1 = nn.Linear(self.doc_add_feats + self.k_sent_maxpool, 8, bias=True).to(model_device)
+        self.final_activ_1 = torch.nn.LeakyReLU(negative_slope=0.1).to(model_device)
+        self.final_layer_2 = nn.Linear(8, 1, bias=True).to(model_device)
+        self.oo_layer = nn.Linear(2, 1, bias=True).to(model_device)
 
     def my_hinge_loss(self, positives, negatives, margin=1.0):
         delta = negatives - positives
@@ -901,9 +1075,9 @@ class Sent_Posit_Drmm_Modeler(nn.Module):
     def do_for_one_doc_cnn(self, doc_sents_embeds, oh_sims, sents_af, question_embeds, q_conv_res_trigram, q_weights, k2):
         res = []
         for i in range(len(doc_sents_embeds)):
-            sim_oh = autograd.Variable(torch.FloatTensor(oh_sims[i]), requires_grad=False).to(device)
-            sent_embeds = doc_sents_embeds[i]
-            gaf = autograd.Variable(torch.FloatTensor(sents_af[i]), requires_grad=False).to(device)
+            sim_oh = autograd.Variable(torch.FloatTensor(oh_sims[i]), requires_grad=False).to(model_device)
+            sent_embeds = doc_sents_embeds[i].to(model_device)
+            gaf = autograd.Variable(torch.FloatTensor(sents_af[i]), requires_grad=False).to(model_device)
             #
             conv_res            = self.apply_context_convolution(sent_embeds, self.trigram_conv_1, self.trigram_conv_activation_1)
             conv_res            = self.apply_context_convolution(conv_res, self.trigram_conv_2, self.trigram_conv_activation_2)
@@ -933,8 +1107,8 @@ class Sent_Posit_Drmm_Modeler(nn.Module):
         res = []
         hn = self.context_h0
         for i in range(len(doc_sents_embeds)):
-            sent_embeds = autograd.Variable(torch.FloatTensor(doc_sents_embeds[i]), requires_grad=False).to(device)
-            gaf = autograd.Variable(torch.FloatTensor(sents_af[i]), requires_grad=False).to(device)
+            sent_embeds = autograd.Variable(torch.FloatTensor(doc_sents_embeds[i]), requires_grad=False).to(model_device)
+            gaf = autograd.Variable(torch.FloatTensor(sents_af[i]), requires_grad=False).to(model_device)
             conv_res, hn = self.apply_context_gru(sent_embeds, hn)
             #
             sim_insens = self.my_cosine_sim(question_embeds, sent_embeds).squeeze(0)
@@ -969,7 +1143,7 @@ class Sent_Posit_Drmm_Modeler(nn.Module):
         if (len(res.size()) == 0):
             res = res.unsqueeze(0)
         if (res.size()[0] < k):
-            to_concat = torch.zeros(k - res.size()[0]).to(device)
+            to_concat = torch.zeros(k - res.size()[0]).to(model_device)
             res = torch.cat([res, to_concat], -1)
         return res
 
@@ -990,7 +1164,7 @@ class Sent_Posit_Drmm_Modeler(nn.Module):
         return res
 
     def apply_mesh_gru(self, mesh_embeds):
-        mesh_embeds = autograd.Variable(torch.FloatTensor(mesh_embeds), requires_grad=False).to(device)
+        mesh_embeds = autograd.Variable(torch.FloatTensor(mesh_embeds), requires_grad=False).to(model_device)
         output, hn = self.mesh_gru(mesh_embeds.unsqueeze(1), self.mesh_h0)
         return output[-1, 0, :]
 
@@ -1003,9 +1177,10 @@ class Sent_Posit_Drmm_Modeler(nn.Module):
         return output
 
     def emit_one(self, doc1_sents_embeds, doc1_oh_sim, question_embeds, q_idfs, sents_gaf, doc_gaf):
-        q_idfs          = autograd.Variable(torch.FloatTensor(q_idfs), requires_grad=False).to(device)
-        doc_gaf         = autograd.Variable(torch.FloatTensor(doc_gaf), requires_grad=False).to(device)
-        #
+        q_idfs          = autograd.Variable(torch.FloatTensor(q_idfs), requires_grad=False).to(model_device)
+        doc_gaf         = autograd.Variable(torch.FloatTensor(doc_gaf), requires_grad=False).to(model_device)
+        question_embeds = question_embeds.to(model_device)
+        ################################################################
         q_context = self.apply_context_convolution(question_embeds, self.trigram_conv_1, self.trigram_conv_activation_1)
         q_context = self.apply_context_convolution(q_context, self.trigram_conv_2, self.trigram_conv_activation_2)
         #
@@ -1014,13 +1189,7 @@ class Sent_Posit_Drmm_Modeler(nn.Module):
         q_weights = F.softmax(q_weights, dim=-1)
         #
         good_out, gs_emits = self.do_for_one_doc_cnn(
-            doc1_sents_embeds,
-            doc1_oh_sim,
-            sents_gaf,
-            question_embeds,
-            q_context,
-            q_weights,
-            self.k_sent_maxpool
+            doc1_sents_embeds, doc1_oh_sim, sents_gaf, question_embeds, q_context, q_weights, self.k_sent_maxpool
         )
         #
         good_out_pp = torch.cat([good_out, doc_gaf], -1)
@@ -1038,58 +1207,47 @@ class Sent_Posit_Drmm_Modeler(nn.Module):
 
     def forward(self, doc1_sents_embeds, doc2_sents_embeds, doc1_oh_sim, doc2_oh_sim,
                 question_embeds, q_idfs, sents_gaf, sents_baf, doc_gaf, doc_baf):
-        q_idfs = autograd.Variable(torch.FloatTensor(q_idfs), requires_grad=False).to(device)
-        doc_gaf = autograd.Variable(torch.FloatTensor(doc_gaf), requires_grad=False).to(device)
-        doc_baf = autograd.Variable(torch.FloatTensor(doc_baf), requires_grad=False).to(device)
-        #
+        q_idfs  = autograd.Variable(torch.FloatTensor(q_idfs), requires_grad=False).to(model_device)
+        doc_gaf = autograd.Variable(torch.FloatTensor(doc_gaf), requires_grad=False).to(model_device)
+        doc_baf = autograd.Variable(torch.FloatTensor(doc_baf), requires_grad=False).to(model_device)
+        question_embeds = question_embeds.to(model_device)
+        ################################################################
         q_context = self.apply_context_convolution(question_embeds, self.trigram_conv_1, self.trigram_conv_activation_1)
         q_context = self.apply_context_convolution(q_context, self.trigram_conv_2, self.trigram_conv_activation_2)
-        #
+        ################################################################
         q_weights = torch.cat([q_context, q_idfs], -1)
         q_weights = self.q_weights_mlp(q_weights).squeeze(-1)
         q_weights = F.softmax(q_weights, dim=-1)
-        #
+        ################################################################
         good_out, gs_emits = self.do_for_one_doc_cnn(
-            doc1_sents_embeds,
-            doc1_oh_sim,
-            sents_gaf,
-            question_embeds,
-            q_context,
-            q_weights,
-            self.k_sent_maxpool
+            doc1_sents_embeds, doc1_oh_sim, sents_gaf, question_embeds, q_context, q_weights, self.k_sent_maxpool
         )
         bad_out, bs_emits = self.do_for_one_doc_cnn(
-            doc2_sents_embeds,
-            doc2_oh_sim,
-            sents_baf,
-            question_embeds,
-            q_context,
-            q_weights,
-            self.k_sent_maxpool
+            doc2_sents_embeds, doc2_oh_sim, sents_baf, question_embeds, q_context, q_weights, self.k_sent_maxpool
         )
-        #
+        ################################################################
         good_out_pp = torch.cat([good_out, doc_gaf], -1)
         bad_out_pp = torch.cat([bad_out, doc_baf], -1)
-        #
+        ################################################################
         final_good_output = self.final_layer_1(good_out_pp)
         final_good_output = self.final_activ_1(final_good_output)
         final_good_output = self.final_layer_2(final_good_output)
-        #
+        ################################################################
         gs_emits = gs_emits.unsqueeze(-1)
         gs_emits = torch.cat([gs_emits, final_good_output.unsqueeze(-1).expand_as(gs_emits)], -1)
         gs_emits = self.oo_layer(gs_emits).squeeze(-1)
         gs_emits = torch.sigmoid(gs_emits)
-        #
+        ################################################################
         final_bad_output = self.final_layer_1(bad_out_pp)
         final_bad_output = self.final_activ_1(final_bad_output)
         final_bad_output = self.final_layer_2(final_bad_output)
-        #
+        ################################################################
         bs_emits = bs_emits.unsqueeze(-1)
         # bs_emits = torch.cat([bs_emits, final_good_output.unsqueeze(-1).expand_as(bs_emits)], -1)
         bs_emits = torch.cat([bs_emits, final_bad_output.unsqueeze(-1).expand_as(bs_emits)], -1)
         bs_emits = self.oo_layer(bs_emits).squeeze(-1)
         bs_emits = torch.sigmoid(bs_emits)
-        #
+        ################################################################
         loss1 = self.my_hinge_loss(final_good_output, final_bad_output)
         return loss1, final_good_output, final_bad_output, gs_emits, bs_emits
 
@@ -1105,9 +1263,6 @@ def load_model_from_checkpoint(resume_dir):
         #############################################################################################
         print("=> loaded checkpoint '{}' (epoch {})".format(resume_from, checkpoint['epoch']))
 
-min_doc_score               = -1000.
-min_sent_score              = -1000.
-emit_only_abstract_sents    = False
 ###########################################################
 use_cuda            = torch.cuda.is_available()
 ###########################################################
@@ -1115,13 +1270,14 @@ batch_no            = sys.argv[1]
 f_in1               = '/home/dpappas/bioasq_all/bioasq7/data/test_batch_{}/BioASQ-task7bPhaseA-testset{}'.format(batch_no, batch_no)
 f_in2               = '/home/dpappas/bioasq_all/bioasq7/data/test_batch_{}/bioasq7_bm25_top100/bioasq7_bm25_top100.test.pkl'.format(batch_no)
 f_in3               = '/home/dpappas/bioasq_all/bioasq7/data/test_batch_{}/bioasq7_bm25_top100/bioasq7_bm25_docset_top100.test.pkl'.format(batch_no)
-odir                = './test_bert_jpdrmm_unfrozen_high_batch{}/'.format(batch_no)
+###########################################################
+resume_from         = '/media/dpappas/dpappas_data/models_out/bioasq7_bertjpdrmadaptnf_snip_adapt_frozen_run_0_WL_0.0/'
+odir                = os.path.join(resume_from, 'batch_{}'.format(batch_no))
+adapt               = '_adapt_' in resume_from
 ###########################################################
 eval_path           = '/home/dpappas/bioasq_all/eval/run_eval.py'
 retrieval_jar_path  = '/home/dpappas/bioasq_all/dist/my_bioasq_eval_2.jar'
-odd                 = '/home/dpappas/'
 ###########################################################
-w2v_bin_path        = '/home/dpappas/bioasq_all/pubmed2018_w2v_30D.bin'
 idf_pickle_path     = '/home/dpappas/bioasq_all/idf.pkl'
 ###########################################################
 if (not os.path.exists(odir)):
@@ -1133,30 +1289,28 @@ deviation           = 1.2210
 print(avgdl, mean, deviation)
 ###########################################################
 k_for_maxpool       = 5
-k_sent_maxpool      = 5
 embedding_dim       = 768 #200
 ###########################################################
 my_seed     = 1
 random.seed(my_seed)
 torch.manual_seed(my_seed)
 ###########################################################
-print('Compiling model...')
-max_seq_length      = 50
+use_cuda            = True
 device              = torch.device("cuda") if(use_cuda) else torch.device("cpu")
-bert_model          = 'bert-base-uncased'
-cache_dir           = '/home/dpappas/bert_cache/'
-bert_tokenizer      = BertTokenizer.from_pretrained(bert_model, do_lower_case=True, cache_dir=cache_dir)
-bert_model          = BertForSequenceClassification.from_pretrained(bert_model, cache_dir=PYTORCH_PRETRAINED_BERT_CACHE / 'distributed_{}'.format(-1), num_labels=2)
-model               = Sent_Posit_Drmm_Modeler(embedding_dim=embedding_dim, k_for_maxpool=k_for_maxpool)
+model_device        = device
+bert_device         = device
 ###########################################################
-resume_from         = '/media/dpappas/dpappas_data/models_out/bioasq7_bert_jpdrmm_2L_0p01_unfrozen_run_0/'
+model               = Sent_Posit_Drmm_Modeler(embedding_dim=embedding_dim, k_for_maxpool=k_for_maxpool, adapt=adapt).to(device)
+#####################
+cache_dir           = 'bert-base-uncased' # '/home/dpappas/bert_cache/'
+bert_tokenizer      = BertTokenizer.from_pretrained(cache_dir)
+bert_model          = BertModel.from_pretrained(cache_dir,  output_hidden_states=True, output_attentions=False).to(device)
 load_model_from_checkpoint(resume_from)
 for param in model.parameters():
     param.requires_grad = False
 for param in bert_model.parameters():
     param.requires_grad = False
-print_params(model)
-print_params(bert_model)
+###########################################################
 bert_model.to(device)
 model.to(device)
 ###########################################################
@@ -1174,10 +1328,12 @@ with open(f_in2, 'rb') as f:
 with open(f_in3, 'rb') as f:
     test_docs = pickle.load(f)
 ###########################################################
-words = {}
+words           = {}
 GetWords(test_data, test_docs, words)
 print('loading idfs')
-idf, max_idf = load_idfs(idf_pickle_path, words)
+idf, max_idf    = load_idfs(idf_pickle_path, words)
 ###########################################################
 test_map        = get_one_map('test', test_data, test_docs, use_sent_tokenizer=True)
 print(test_map)
+###########################################################
+
