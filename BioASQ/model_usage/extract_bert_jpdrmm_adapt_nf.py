@@ -1336,4 +1336,3 @@ idf, max_idf    = load_idfs(idf_pickle_path, words)
 test_map        = get_one_map('test', test_data, test_docs, use_sent_tokenizer=True)
 print(test_map)
 ###########################################################
-
