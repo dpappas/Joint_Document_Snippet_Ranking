@@ -975,14 +975,14 @@ resume_from                 = '/media/dpappas/dpappas_data/models_out/bioasq_doc
 if (not os.path.exists(odir)):
     os.makedirs(odir)
 ###########################################################
-avgdl               = 21.1907
-mean                = 0.6275
-deviation           = 1.2210
+avgdl                       = 21.1907
+mean                        = 0.6275
+deviation                   = 1.2210
 print(avgdl, mean, deviation)
 ###########################################################
-k_for_maxpool       = 5
-k_sent_maxpool      = 5
-embedding_dim       = 30 #200
+k_for_maxpool               = 5
+k_sent_maxpool              = 5
+embedding_dim               = 30 #200
 ###########################################################
 my_seed     = 1
 random.seed(my_seed)
