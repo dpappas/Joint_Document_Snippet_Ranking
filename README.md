@@ -22,6 +22,16 @@ You can find the code in the direcory: `NaturalQuestions/data_processing/`
 
 ### Example commands 
 
+In order to run properly the extraction files you need to change the following paths:
+```
+w2v_bin_path
+idf_pickle_path
+odir
+eval_path
+retrieval_jar_path
+resume_from
+```
+
 ### Ablations and Tuning
 
 
