@@ -25,7 +25,6 @@ You can find the code in the direcory: `NaturalQuestions/data_processing/`
 ### Ablations and Tuning
 
 
-
 ### Author
 
 * [Dimitris Pappas](dpappas@aueb.gr)
