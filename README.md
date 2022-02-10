@@ -32,8 +32,6 @@ Path to the 2nd evaluation script: Variable retrieval_jar_path
 Path to the pretrained model: Variable resume_from
 ```
 
-### Ablations and Tuning
-
 
 ### Author
 
