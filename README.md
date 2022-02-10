@@ -16,6 +16,10 @@ First you need to download the [official dataset](https://ai.google.com/research
 
 ##### Natural Questions
 
+The Natural Questions dataset is too big to share on GitHub. 
+Instead we share the code to preprocess the Natural Questions data.
+You can find the code in the direcory: `NaturalQuestions/data_processing/` 
+
 ### Example commands 
 
 ### Ablations and Tuning
