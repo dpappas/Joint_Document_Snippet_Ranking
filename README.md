@@ -14,6 +14,13 @@ First you need to download the [official dataset](https://ai.google.com/research
  
 ##### PubMED 
 
+All PubMed data were collected from the official repository:
+https://ftp.ncbi.nlm.nih.gov/pubmed/baseline/ 
+
+Updates performed weekly using data from the official update repository:
+https://ftp.ncbi.nlm.nih.gov/pubmed/updatefiles/
+
+
 ##### Natural Questions
 
 The Natural Questions dataset is too big to share on GitHub. 
