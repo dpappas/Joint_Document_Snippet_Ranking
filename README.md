@@ -24,12 +24,12 @@ You can find the code in the direcory: `NaturalQuestions/data_processing/`
 
 In order to run properly the extraction files you need to change the following paths:
 ```
-Path to the w2v embeddings file: w2v_bin_path
-Path to the precomputed idf file: idf_pickle_path
-Path to the output directory: odir
-Path to the 1st evaluation script: eval_path
-Path to the 2nd evaluation script: retrieval_jar_path
-Path to the pretrained model: resume_from
+Path to the w2v embeddings file: Variable w2v_bin_path
+Path to the precomputed idf file: Variable idf_pickle_path
+Path to the output directory: Variable odir
+Path to the 1st evaluation script: Variable eval_path
+Path to the 2nd evaluation script: Variable retrieval_jar_path
+Path to the pretrained model: Variable resume_from
 ```
 
 ### Ablations and Tuning
