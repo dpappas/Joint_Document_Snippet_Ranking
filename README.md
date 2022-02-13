@@ -20,7 +20,6 @@ https://ftp.ncbi.nlm.nih.gov/pubmed/baseline/
 Updates performed weekly using data from the official update repository:
 https://ftp.ncbi.nlm.nih.gov/pubmed/updatefiles/
 
-
 ##### Natural Questions
 
 The Natural Questions dataset is too big to share on GitHub. 
@@ -39,6 +38,10 @@ Path to the 2nd evaluation script: Variable retrieval_jar_path
 Path to the pretrained model: Variable resume_from
 ```
 
+For The Natural Questions dataset you have to change the paremeters above and then execute
+```
+python3.6 extract w2v_jpdrmm.py
+```  
 
 ### Author
 
