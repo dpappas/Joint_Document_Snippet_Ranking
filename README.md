@@ -45,7 +45,7 @@ python3.6 extract_w2v_jpdrmm.py
 
 For the BioASQ dataset you have to change the paremeters above and then execute
 ```
-python3.6 extract_from_trained_ablation.py
+python3.6 extract_from_trained_ablation.py 1111111
 ```
 
 ### Author
