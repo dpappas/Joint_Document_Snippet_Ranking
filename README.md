@@ -47,6 +47,7 @@ For the BioASQ dataset you have to change the paremeters above and then execute
 ```
 python3.6 extract_from_trained_ablation.py 1111111
 ```
+The `resume_from` parameter has to be one of the directories in the `./trained_models/ablation_models/` directory 
 
 ### Author
 
