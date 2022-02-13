@@ -40,8 +40,13 @@ Path to the pretrained model: Variable resume_from
 
 For The Natural Questions dataset you have to change the paremeters above and then execute
 ```
-python3.6 extract w2v_jpdrmm.py
-```  
+python3.6 extract_w2v_jpdrmm.py
+```
+
+For the BioASQ dataset you have to change the paremeters above and then execute
+```
+python3.6 extract_from_trained_ablation.py
+```
 
 ### Author
 
